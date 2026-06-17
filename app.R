@@ -217,7 +217,7 @@ server <- function(input, output, session) {
     ggplot() +
       geom_bar(data=bar_data,
                aes(x=x_pos, y=Aggregate, fill=Series),
-               stat="identity", width=0.4) +
+               stat="identity", width=0.3) +
       geom_line(data=goal,
                 aes(x=x_pos_mapped, y=Goal),
                 color="gray40", linewidth=1.2) +
