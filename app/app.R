@@ -10,21 +10,19 @@ months_list <- list(
   "September"=9,"October"=10,"November"=11,"December"=12
 )
 
-dateBoxes <- function(id, label, default_month=3, default_day=1, default_year=2025) {
+dateBoxes <- function(id, label, default_month=3, default_year=2025) {
   div(
     tags$label(label, style="font-size:12px;font-weight:600;color:#6b7280;
                               display:block;margin-bottom:5px;"),
-    div(style="display:grid;grid-template-columns:2fr 1fr 1.5fr;gap:6px;",
+    div(style="display:grid;grid-template-columns:2fr 1.5fr;gap:6px;",
         selectInput(paste0(id,"_month"), label=NULL,
                     choices=months_list, selected=default_month),
-        numericInput(paste0(id,"_day"), label=NULL,
-                     value=default_day, min=1, max=31, step=1),
         numericInput(paste0(id,"_year"), label=NULL,
                      value=default_year, min=2000, max=2100, step=1)
     ),
-    div(style="display:grid;grid-template-columns:2fr 1fr 1.5fr;gap:6px;
+    div(style="display:grid;grid-template-columns:2fr 1.5fr;gap:6px;
                font-size:10px;color:#9ca3af;text-align:center;margin-top:2px;",
-        div("Month"), div("Day"), div("Year")
+        div("Month"), div("Year")
     )
   )
 }
@@ -58,39 +56,36 @@ ui <- fluidPage(
                    tags$polyline(points="22 12 18 12 15 21 9 3 6 12 2 12"))
       ),
       div(
-        tags$strong("HPV Vaccination Chart Generator",style="font-size:17px;color:#1a1a2e;"),
-        tags$div("Upload CSV → set year boundaries → download PNG",
-                 style="font-size:12px;color:#6b7280;margin-top:2px;")
+        tags$strong("HPV Vaccination Chart Generator",style="font-size:17px;color:#1a1a2e;")
       )
   ),
   
   fluidRow(
     column(3, wellPanel(
-      div(class="section-label","1  Upload Data"),
+      div(class="section-label","Upload Data"),
       fileInput("file_data",label=NULL,accept=".csv",placeholder="Choose CSV..."),
       div(class="upload-hint","Needs Month, Counts, Aggregate columns"),
       
       hr(),
-      div(class="section-label","2  Set Year 1 Start"),
-      dateBoxes("year1_start","Year 1 start",default_month=3,default_day=1,default_year=2025),
+      div(class="section-label","Set Date Start"),
+      dateBoxes("year1_start","Year 1 start", default_month=3, default_year=2025),
       div(style="font-size:11px;color:#9ca3af;margin-top:6px;",
           "Year 2 begins automatically with the first data point after Year 1."
       ),
       
       hr(),
-      div(class="section-label","3  Configure"),
+      div(class="section-label","Configure"),
       sliderInput("goal_pct","Goal increase (%)",min=0,max=100,value=25,step=1),
       textInput("chart_title","Chart title",value="Monthly Cumulative HPV Vaccinations"),
       textInput("year1_label","Year 1 label",value="Year 1 (Baseline)"),
       textInput("year2_label","Year 2 label",value="Year 2 (Intervention)"),
       
       hr(),
-      div(class="section-label", "4  Download"),
+      div(class="section-label", "Download"),
       div(
-        style = "font-size:12px;color:#6b7280;",
-        "Download is available in the full R Shiny version. ",
-        "In this browser version, use your browser’s screenshot or Print → Save as PDF."
-      ),
+  style = "font-size:12px;color:#6b7280;white-space:pre-line;",
+  "Download is available in the full R Shiny version.\nIn this browser version, use your browser's screenshot or Print and Save as PDF."
+),
       
       hr(),
       div(class="format-box",
@@ -118,12 +113,11 @@ server <- function(input, output, session) {
   
   # ── Assemble dates from boxes ─────────────────────────────────────────────
   year1_start <- reactive({
-    req(input$year1_start_month, input$year1_start_day, input$year1_start_year)
-    as.Date(sprintf("%04d-%02d-%02d",
-                    as.integer(input$year1_start_year),
-                    as.integer(input$year1_start_month),
-                    as.integer(input$year1_start_day)))
-  })
+  req(input$year1_start_month, input$year1_start_year)
+  as.Date(sprintf("%04d-%02d-01",
+                  as.integer(input$year1_start_year),
+                  as.integer(input$year1_start_month)))
+})
   
   # Year 2 starts the month after the last Year 1 row
   year2_start <- reactive({
