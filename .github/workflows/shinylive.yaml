@@ -1,0 +1,28 @@
+name: Build Shinylive App
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - name: Install packages
+        run: |
+          R -e 'install.packages(c("shiny", "shinylive"))'
+
+      - name: Build Shinylive app
+        run: |
+          R -e 'shinylive::export("app", "docs")'
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: docs
