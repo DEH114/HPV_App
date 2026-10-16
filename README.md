@@ -16,7 +16,7 @@ Due to the static requirements of Github Pages, the link above can only generate
 
 If you wish to download a .png file of the plot for resizing locally, this can be done through Shinyapps.io: 
 
-https://deh114.shinyapps.io/shiny/
+ https://deh114.shinyapps.io/HPVApp/
 
 *Shinyapps requires server fees past certain free allocations. If it is inactive, please contact DEH114@pitt.edu. 
 
