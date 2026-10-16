@@ -9,6 +9,37 @@ months_list <- list(
   "May"=5,"June"=6,"July"=7,"August"=8,
   "September"=9,"October"=10,"November"=11,"December"=12
 )
+parse_month <- function(x) {
+  x   <- trimws(as.character(x))
+  out <- as.Date(rep(NA_character_, length(x)))
+  
+  # Excel serial numbers
+  i <- grepl("^[0-9]{4,6}$", x)
+  out[i] <- as.Date(as.numeric(x[i]), origin = "1899-12-30")
+  
+  # Text formats, matched by pattern so 2- vs 4-digit years don't get confused
+  rules <- list(
+    list("^\\d{1,2}/\\d{1,2}/\\d{4}$", "%m/%d/%Y", ""),      # 10/1/2023
+    list("^\\d{1,2}/\\d{1,2}/\\d{2}$", "%m/%d/%y", ""),      # 10/1/23
+    list("^\\d{4}-\\d{1,2}-\\d{1,2}",  "%Y-%m-%d", ""),      # 2023-10-01
+    list("^\\d{1,2}/\\d{4}$",          "%d/%m/%Y", "01/"),   # 10/2023
+    list("^[A-Za-z]{3,9}-\\d{2}$",     "%d-%b-%y", "01-"),   # Oct-23
+    list("^[A-Za-z]{3,9}-\\d{4}$",     "%d-%b-%Y", "01-"),   # Oct-2023
+    list("^[A-Za-z]{3,9} \\d{4}$",     "%d %b %Y", "01 ")    # Oct 2023
+  )
+  for (r in rules) {
+    i <- is.na(out) & grepl(r[[1]], x)
+    if (any(i)) out[i] <- as.Date(paste0(r[[3]], x[i]), format = r[[2]])
+  }
+  
+  # Snap everything to the first of the month
+  as.Date(format(out, "%Y-%m-01"))
+}
+
+clean_number <- function(x) {
+  x <- gsub("[^0-9.-]", "", as.character(x))   # strips commas, spaces, $, etc.
+  suppressWarnings(as.numeric(x))
+}
 
 dateBoxes <- function(id, label, default_month=3, default_year=2025) {
   div(
@@ -122,21 +153,59 @@ server <- function(input, output, session) {
   # Year 2 starts the month after the last Year 1 row
   year2_start <- reactive({
     req(raw_data(), year1_start())
-    last_y1_month <- raw_data() %>%
-      filter(Month >= year1_start()) %>%
-      arrange(Month) %>%
-      dplyr::slice(12) %>%
-      pull(Month)
-    # First day of the following month
-    as.Date(format(last_y1_month + 32, "%Y-%m-01"))
+    y1 <- raw_data() %>% filter(Month >= year1_start()) %>% arrange(Month)
+    
+    shiny::validate(
+      shiny::need(nrow(y1) > 0,
+                  paste0("No data on or after ", format(year1_start(), "%b %Y"),
+                         ". Your file covers ", format(min(raw_data()$Month), "%b %Y"),
+                         " to ", format(max(raw_data()$Month), "%b %Y"), ".")),
+      shiny::need(nrow(y1) >= 12,
+                  paste0("Year 1 needs 12 months of data from ", format(year1_start(), "%b %Y"),
+                         ", but only ", nrow(y1), " found."))
+    )
+    
+    as.Date(format(y1$Month[12] + 32, "%Y-%m-01"))
   })
   
   # ── Parse CSV ─────────────────────────────────────────────────────────────
   raw_data <- reactive({
     req(input$file_data)
-    df <- read.csv(input$file_data$datapath)
-    df$Month <- as.Date(df$Month,
-                        tryFormats=c("%m/%d/%y","%m/%d/%Y","%Y-%m-%d"))
+    
+    df <- read.csv(input$file_data$datapath,
+                   colClasses = "character",
+                   fileEncoding = "UTF-8-BOM",
+                   strip.white = TRUE,
+                   check.names = FALSE)
+    
+    # Normalize header names
+    names(df) <- tools::toTitleCase(tolower(trimws(names(df))))
+    
+    shiny::validate(
+      shiny::need(all(c("Month", "Counts") %in% names(df)),
+                  paste0("Couldn't find 'Month' and 'Counts' columns. Columns found: ",
+                         paste(names(df), collapse = ", ")))
+    )
+    
+    raw_months <- df$Month
+    df$Month   <- parse_month(raw_months)
+    df$Counts  <- clean_number(df$Counts)
+    
+    shiny::validate(
+      shiny::need(any(!is.na(df$Month)),
+                  paste0("Couldn't read any dates. First values in the Month column look like: ",
+                         paste(head(raw_months, 3), collapse = " | ")))
+    )
+    
+    df <- df[!is.na(df$Month), ]
+    
+    bad <- which(is.na(df$Counts))
+    shiny::validate(
+      shiny::need(length(bad) == 0,
+                  paste0("Counts is blank or non-numeric for: ",
+                         paste(format(df$Month[bad], "%b %Y"), collapse = ", ")))
+    )
+    
     df %>% arrange(Month)
   })
   
@@ -156,9 +225,6 @@ server <- function(input, output, session) {
   })
   
   # ── Year 2: rows from year2_start onward ──────────────────────────────────
-  # Key fix: align Year 2 rows to Year 1 x-axis positions by matching
-  # calendar month, so a Sep Year2 bar lands on the Sep x-position
-  # regardless of how many months of Year 2 data exist.
   intervention_data <- reactive({
     req(raw_data(), year2_start(), baseline_data())
     base <- baseline_data()
@@ -176,7 +242,7 @@ server <- function(input, output, session) {
     df <- df %>%
       left_join(base %>% select(cal_month, x_pos_mapped = month_num),
                 by = "cal_month") %>%
-      filter(!is.na(x_pos_mapped))   # drop any months not present in Year 1
+      filter(!is.na(x_pos_mapped))   
     
     df
   })
